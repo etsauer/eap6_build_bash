@@ -1,0 +1,335 @@
+#!/bin/bash
+
+function access_logs()
+{
+        $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/subsystem=web/virtual-server=default-host/access-log=configuration:add(prefix=$server_name-access.log.,rotate=true,resolve-hosts=false)
+/subsystem=web/virtual-server=default-host/access-log=configuration/directory=configuration:add(path=http_access_logs,relative-to=jboss.server.log.dir)
+EOFADD
+}
+
+function database_driver()
+{
+	if [ "$NEED_ORACLE" == "true" ]
+	then
+        	$JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/subsystem=datasources/jdbc-driver=$ORACLE_DRIVER_NAME:add(driver-name=$ORACLE_DRIVER_NAME,driver-module-name=$ORACLE_MODULE_NAME,driver-xa-datasource-class-name=$ORACLE_CLASS_NAME)
+EOFADD
+	fi
+
+	if [ "$NEED_DB2" == "true" ]
+	then
+        	$JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/subsystem=datasources/jdbc-driver=$DB2_DRIVER_NAME:add(driver-name=$DB2_DRIVER_NAME,driver-module-name=$DB2_MODULE_NAME,driver-xa-datasource-class-name=$DB2_CLASS_NAME)
+EOFADD
+	fi
+
+	if [ "$NEED_SQLSERVER" == "true" ]
+	then
+        $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/subsystem=datasources/jdbc-driver=$SQLSERVER_DRIVER_NAME:add(driver-name=$SQLSERVER_DRIVER_NAME,driver-module-name=$SQLSERVER_MODULE_NAME,driver-xa-datasource-class-name=$SQLSERVER_CLASS_NAME)
+EOFADD
+	fi
+}
+
+function datasource()
+{
+if [ "$NEED_ORACLE_DATASOURCE" == "true" ]
+then
+	datasource_oracle
+fi
+
+if [ "$NEED_DB2_DATASOURCE" == "true" ]
+then
+	datasource_db2
+fi
+
+if [ "$NEED_SQLSERVER_DATASOURCE" == "true" ]
+then
+	datasource_sqlserver
+fi
+}
+
+function datasource_db2()
+{
+        DSTOTAL=`grep "^NUM_DB2_DS\b" $CONF | awk -F"=" '{print $2}'`
+        DSNUM=1
+        while [ $DSNUM -le $DSTOTAL ]
+        do
+                DS_NAME=`grep "^DB2_DATASOURCE_NAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_JNDI=`grep "^DB2_DATASOURCE_JNDI_NAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_DRIVER=`grep "^DB2_DATASOURCE_DRIVER_NAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_URL=`grep "^DB2_DATASOURCE_CONNECTION_URL_$DSNUM\b" $CONF | awk -F"$DSNUM=" '{print $2}'`
+                DS_USER=`grep "^DB2_DATASOURCE_USERNAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_PASS=`grep "^DB2_DATASOURCE_PASSWORD_$DSNUM\b" $CONF | awk -F"$DSNUM=" '{print $2}'`
+
+                $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+data-source add --name=$DS_NAME --jndi-name=$DS_JNDI --driver-name=$DS_DRIVER --connection-url="$DS_URL" --user-name=$DS_USER --password="\${$DS_PASS}"
+data-source enable --name=$DS_NAME
+
+EOFADD
+                DSNUM=$(( $DSNUM + 1 ))
+        done
+}
+
+function datasource_oracle()
+{
+        DSTOTAL=`grep "^NUM_ORACLE_DS\b" $CONF | awk -F"=" '{print $2}'`
+        DSNUM=1
+        while [ $DSNUM -le $DSTOTAL ]
+        do
+                DS_NAME=`grep "^ORACLE_DATASOURCE_NAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_JNDI=`grep "^ORACLE_DATASOURCE_JNDI_NAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_DRIVER=`grep "^ORACLE_DATASOURCE_DRIVER_NAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_URL=`grep "^ORACLE_DATASOURCE_CONNECTION_URL_$DSNUM\b" $CONF | awk -F"$DSNUM=" '{print $2}'`
+                DS_USER=`grep "^ORACLE_DATASOURCE_USERNAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_PASS=`grep "^ORACLE_DATASOURCE_PASSWORD_$DSNUM\b" $CONF | awk -F"$DSNUM=" '{print $2}'`
+
+                $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+data-source add --name=$DS_NAME --jndi-name=$DS_JNDI --driver-name=$DS_DRIVER --connection-url=$DS_URL --user-name=$DS_USER --password="\${$DS_PASS}" --exception-sorter-class-name=org.jboss.jca.adapters.jdbc.extensions.oracle.OracleExceptionSorter --stale-connection-checker-class-name=org.jboss.jca.adapters.jdbc.extensions.oracle.OracleStaleConnectionChecker --valid-connection-checker-class-name=org.jboss.jca.adapters.jdbc.extensions.oracle.OracleValidConnectionChecker
+data-source enable --name=$DS_NAME
+
+EOFADD
+                DSNUM=$(( $DSNUM + 1 ))
+        done
+
+}
+
+function datasource_sqlserver()
+{
+        DSTOTAL=`grep "^NUM_SQLSERVER_DS\b" $CONF | awk -F"=" '{print $2}'`
+        DSNUM=1
+        while [ $DSNUM -le $DSTOTAL ]
+        do
+                DS_NAME=`grep "^SQLSERVER_DATASOURCE_NAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_JNDI=`grep "^SQLSERVER_DATASOURCE_JNDI_NAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_DRIVER=`grep "^SQLSERVER_DATASOURCE_DRIVER_NAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_URL=`grep "^SQLSERVER_DATASOURCE_CONNECTION_URL_$DSNUM\b" $CONF | awk -F"$DSNUM=" '{print $2}'`
+                DS_USER=`grep "^SQLSERVER_DATASOURCE_USERNAME_$DSNUM\b" $CONF | awk -F"=" '{print $2}'`
+                DS_PASS=`grep "^SQLSERVER_DATASOURCE_PASSWORD_$DSNUM\b" $CONF | awk -F"$DSNUM=" '{print $2}'`
+
+                $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+data-source add --name=$DS_NAME --jndi-name=$DS_JNDI --driver-name=$DS_DRIVER --connection-url=$DS_URL --user-name=$DS_USER --password="\${$DS_PASS}" --valid-connection-checker-class-name=org.jboss.jca.adapters.jdbc.extensions.mssql.MSSQLValidConnectionChecker
+data-source enable --name=$DS_NAME
+
+EOFADD
+                DSNUM=$(( $DSNUM + 1 ))
+        done
+}
+
+function jgroups()
+{
+# Create the jgroups subsystem for clustering
+
+$JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/socket-binding-group=standard-sockets/socket-binding=jgroups-udp:add(fixed-port=false,multicast-address=\${jboss.default.multicast.address:230.0.0.4},multicast-port=45688,port=55200)
+/socket-binding-group=standard-sockets/socket-binding=jgroups-udp-fd:add(port=54200)
+/extension=org.jboss.as.clustering.jgroups:add
+/subsystem=jgroups:add(default-stack=udp)
+batch
+/subsystem=jgroups/stack=udp:add(transport={"type" => "UDP", "socket-binding" => "jgroups-udp"})
+/subsystem=jgroups/stack=udp:add-protocol(type=PING)
+/subsystem=jgroups/stack=udp:add-protocol(type=MERGE2)
+/subsystem=jgroups/stack=udp:add-protocol(type=FD_SOCK,socket-binding=jgroups-udp-fd)
+/subsystem=jgroups/stack=udp:add-protocol(type=FD)
+/subsystem=jgroups/stack=udp:add-protocol(type=VERIFY_SUSPECT)
+/subsystem=jgroups/stack=udp:add-protocol(type=BARRIER)
+/subsystem=jgroups/stack=udp:add-protocol(type=pbcast.NAKACK)
+/subsystem=jgroups/stack=udp:add-protocol(type=UNICAST2)
+/subsystem=jgroups/stack=udp:add-protocol(type=pbcast.STABLE)
+/subsystem=jgroups/stack=udp:add-protocol(type=pbcast.GMS)
+/subsystem=jgroups/stack=udp:add-protocol(type=UFC)
+/subsystem=jgroups/stack=udp:add-protocol(type=MFC)
+/subsystem=jgroups/stack=udp:add-protocol(type=FRAG2)
+/subsystem=jgroups/stack=udp:add-protocol(type=RSVP)
+run-batch
+batch
+/subsystem=infinispan/cache-container=web:add(aliases=["standard-session-cache"],default-cache="repl",module=org.jboss.as.clustering.web.infinispan)
+/subsystem=infinispan/cache-container=web/transport=TRANSPORT:add(lock-timeout=60000)
+/subsystem=infinispan/cache-container=web/replicated-cache=repl:add(mode=ASYNC,batching=true)
+/subsystem=infinispan/cache-container=web/replicated-cache=repl/file-store=FILE_STORE:add
+/subsystem=infinispan/cache-container=web/replicated-cache=sso:add(mode=SYNC,batching=true)
+/subsystem=infinispan/cache-container=web/distributed-cache=dist:add(l1-lifespan=0,mode=ASYNC,batching=true)
+/subsystem=infinispan/cache-container=web/distributed-cache=dist/file-store=FILE_STORE:add
+/subsystem=infinispan/cache-container=ejb:add(aliases=["sfsb", "sfsb-cache"],default-cache="repl",module="org.jboss.as.clustering.ejb3.infinispan")
+/subsystem=infinispan/cache-container=ejb/transport=TRANSPORT:add(lock-timeout=60000)
+/subsystem=infinispan/cache-container=ejb/replicated-cache=repl:add(mode=ASYNC,batching=true)
+/subsystem=infinispan/cache-container=ejb/replicated-cache=repl/eviction=EVICTION:add(strategy=LRU,max-entries=10000)
+/subsystem=infinispan/cache-container=ejb/replicated-cache=repl/file-store=FILE_STORE:add
+/subsystem=infinispan/cache-container=ejb/replicated-cache=remote-connector-client-mappings:add(mode=SYNC,batching=true)
+/subsystem=infinispan/cache-container=ejb/distributed-cache=dist:add(l1-lifespan=0,mode=ASYNC,batching=true)
+/subsystem=infinispan/cache-container=ejb/distributed-cache=dist/file-store=FILE_STORE:add
+/subsystem=infinispan/cache-container=cluster:add(aliases=["ha-partition"],default-cache=default)
+/subsystem=infinispan/cache-container=cluster/transport=TRANSPORT:add(lock-timeout=60000)
+/subsystem=infinispan/cache-container=cluster/replicated-cache=default:add(mode=SYNC,batching=true)
+/subsystem=infinispan/cache-container=cluster/replicated-cache=default/locking=LOCKING:add(isolation=REPEATABLE_READ)
+run-batch
+:reload
+EOFADD
+isRunning
+}
+
+function mail()
+{
+if [ "$MAIL_USERNAME" != "" ]
+then
+
+        $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=$MAIL_SOCKET_BINDING_NAME:add(host=$MAIL_SERVER_NAME, port=$MAIL_SERVER_PORT)
+/subsystem=mail/mail-session=$MAIL_SESSION_NAME:add(jndi-name="$MAIL_JNDI_NAME")
+/subsystem=mail/mail-session=$MAIL_SESSION_NAME/server=smtp:add(outbound-socket-binding-ref=$MAIL_SOCKET_BINDING_NAME, ssl=$MAIL_SSL, username=$MAIL_USERNAME, password=$MAIL_PASSWORD)
+
+EOFADD
+else
+
+        $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=$MAIL_SOCKET_BINDING_NAME:add(host=$MAIL_SERVER_NAME, port=$MAIL_SERVER_PORT)
+/subsystem=mail/mail-session=$MAIL_SESSION_NAME:add(jndi-name="$MAIL_JNDI_NAME")
+/subsystem=mail/mail-session=$MAIL_SESSION_NAME/server=smtp:add(outbound-socket-binding-ref=$MAIL_SOCKET_BINDING_NAME, ssl=$MAIL_SSL)
+
+EOFADD
+fi
+}
+
+function messaging()
+{
+# Initial setup of the messaging subsystem
+
+$JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/extension=org.jboss.as.messaging:add
+/subsystem=messaging:add
+/subsystem=messaging/hornetq-server=default:add
+/socket-binding-group=standard-sockets/socket-binding=messaging:add(port=5445)
+/socket-binding-group=standard-sockets/socket-binding=messaging-group:add(multicast-address="\${jboss.messaging.group.address:231.7.7.7}", multicast-port="\${jboss.messaging.group.port:9876}", port=0)
+/socket-binding-group=standard-sockets/socket-binding=messaging-throughput:add(port=5455)
+/subsystem=messaging/hornetq-server=default/remote-connector=netty:add(socket-binding=messaging)
+/subsystem=messaging/hornetq-server=default/remote-connector=netty-throughput:add(socket-binding=messaging-throughput, param={"batch-delay" => "50"})
+/subsystem=messaging/hornetq-server=default/remote-acceptor=netty:add(socket-binding=messaging)
+/subsystem=messaging/hornetq-server=default/remote-acceptor=netty-throughput:add(socket-binding=messaging-throughput,param={"batch-delay" => "50", "direct-deliver" => "false"})
+/subsystem=messaging/hornetq-server=default/discovery-group=dg-group1:add(socket-binding=messaging-group)
+/subsystem=messaging/hornetq-server=default/in-vm-connector=in-vm:add(server-id=0)
+/subsystem=messaging/hornetq-server=default/in-vm-acceptor=in-vm:add(server-id=0)
+/subsystem=messaging/hornetq-server=default/:write-attribute(name=security-enabled,value=false)
+/subsystem=messaging/hornetq-server=default/security-setting=#:add()
+/subsystem=messaging/hornetq-server=default/security-setting=#/role=guest:add(send=true,consume=true)
+/subsystem=messaging/hornetq-server=default/jms-queue=jms.queue.DLQ:add(durable=true,entries=["jms/DLQ"])
+/subsystem=messaging/hornetq-server=default/jms-queue=jms.queue.EXPIRY:add(durable=true,entries=["jms/ExpiryQueue"])
+/subsystem=messaging/hornetq-server=default/address-setting=#:add(address-full-policy=BLOCK,dead-letter-address=jms.queue.DLQ,expiry-address=jms.queue.EXPIRY,max-delivery-attempts=1000,redelivery-delay=2000)
+/:reload
+
+EOFADD
+
+isRunning
+
+$JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/subsystem=messaging/hornetq-server=default/connection-factory=InVmConnectionFactory:add(connector={"in-vm" => undefined},entries=["java:/ConnectionFactory"])
+/subsystem=messaging/hornetq-server=default/pooled-connection-factory=hornetq-ra:add(connector={"in-vm" => undefined},entries=["java:/JmsXA"])
+/subsystem=ejb3/:write-attribute(name=default-resource-adapter-name,value=hornetq-ra)
+/subsystem=ejb3/:write-attribute(name=default-mdb-instance-pool,value=mdb-strict-max-pool)
+
+EOFADD
+
+if [ $MESSAGING_NUM_OF_TOPICS -gt 0 ]
+then
+        TQTOTAL=$MESSAGING_NUM_OF_TOPICS
+        TQNUM=1
+        while [ $TQNUM -le $TQTOTAL ]
+        do
+                TQ_NAME=`grep "^MESSAGING_TOPIC_NAME_$TQNUM\b" $CONF | awk -F"=" '{print $2}'`
+                TQ_ENTRIES=`grep "^MESSAGING_TOPIC_ENTRIES_$TQNUM\b" $CONF | awk -F"=" '{print $2}'`
+
+                $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/subsystem=messaging/hornetq-server=default/jms-topic=$TQ_NAME:add(entries=[$TQ_ENTRIES])
+
+EOFADD
+                TQNUM=$(( $TQNUM + 1 ))
+        done
+fi
+
+if [ $MESSAGING_NUM_OF_QUEUES -gt 0 ]
+then
+        TQTOTAL=$MESSAGING_NUM_OF_QUEUES
+        TQNUM=1
+        while [ $TQNUM -le $TQTOTAL ]
+        do
+                TQ_NAME=`grep "^MESSAGING_QUEUE_NAME_$TQNUM\b" $CONF | awk -F"=" '{print $2}'`
+                TQ_ENTRIES=`grep "^MESSAGING_QUEUE_ENTRIES_$TQNUM\b" $CONF | awk -F"=" '{print $2}'`
+                TQ_DURABLE=`grep "^MESSAGING_QUEUE_DURABLE_$TQNUM\b" $CONF | awk -F"=" '{print $2}'`
+
+                $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/subsystem=messaging/hornetq-server=default/jms-queue=$TQ_NAME:add(entries=[$TQ_ENTRIES])
+
+EOFADD
+                TQNUM=$(( $TQNUM + 1 ))
+        done
+fi
+}
+
+function ssl()
+{
+if ! [ -z $SSL_HTTPS_CONNECTOR_KEYSTORE ]
+then
+        echo "Configuring HTTPS..."
+        $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/subsystem=web/connector=https:add(enabled=true, protocol="HTTP/1.1", secure=true, scheme=https, socket-binding=https)
+/subsystem=web/connector=https/ssl=configuration:add(certificate-key-file=$SSL_HTTPS_CONNECTOR_KEYSTORE, key-alias=$SSL_HTTPS_CONNECTOR_KEY_ALIAS, password=$SSL_HTTPS_CONNECTOR_KEYSTORE_PASSWORD)
+EOFADD
+fi
+
+if ! [ -z $SSL_JVM_KEYSTORE ]
+then
+        echo "Configuring KeyStore..."
+        $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/system-property=javax.net.ssl.keyStore:add(value=$SSL_JVM_KEYSTORE)
+/system-property=javax.net.ssl.keyStoreAlias:add(value=$SSL_JVM_KEYSTORE_ALIAS)
+/system-property=javax.net.ssl.keyStorePassword:add(value=$SSL_JVM_KEYSTORE_PASSWORD)
+EOFADD
+fi
+
+if ! [ -z $SSL_JVM_TRUSTSTORE ]
+then
+        echo "Configuring TrustSture..."
+        $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/system-property=javax.net.ssl.trustStore:add(value=$SSL_JVM_TRUSTSTORE)
+/system-property=javax.net.ssl.trustStoreAlias:add(value=$SSL_JVM_TRUSTSTORE_ALIAS)
+/system-property=javax.net.ssl.trustStorePassword:add(value=$SSL_JVM_TRUSTSTORE_PASSWORD)
+EOFADD
+fi
+}
+
+function standards()
+{
+# Change https port from 8443 to 8043
+# Rename log files with server name
+# Remove ExampleDS datasource
+        $JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/socket-binding-group=standard-sockets/socket-binding=https:write-attribute(name=port,value=8043)
+/core-service=management/management-interface=http-interface/:remove
+/subsystem=logging/periodic-rotating-file-handler=FILE:change-file(file={"path"=>"$server_name.out", "relative-to"=>"jboss.server.log.dir"})
+/subsystem=datasources/data-source=ExampleDS:remove
+/subsystem=web/virtual-server=default-host:write-attribute(name=enable-welcome-root,value=false)
+EOFADD
+}
+
+function vault()
+{
+	$JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT <<EOFADD
+/core-service=vault:add(vault-options=[("KEYSTORE_URL" => "$VAULT_KEYSTORE_URL"), ("KEYSTORE_PASSWORD" => "$VAULT_KEYSTORE_PASSWORD"), ("KEYSTORE_ALIAS" => "$VAULT_KEYSTORE_ALIAS"), ("SALT" => "$VAULT_SALT"), ("ITERATION_COUNT" => "$VAULT_ITERATION_COUNT"), ("ENC_FILE_DIR" => "$VAULT_ENC_FILE_DIR")])
+/:reload
+EOFADD
+}
+
+function isRunning()
+{
+RUNNING=false
+while [ "$RUNNING" != "true" ]
+do
+        #echo "Checking Host: $JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT"
+        SERVER_STATE=`$JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT --command="read-attribute server-state" 2>/dev/null`
+        #echo $SERVER_STATE
+        if [ "$SERVER_STATE" == "running" ]
+        then
+                RUNNING="true"
+        fi
+done
+}

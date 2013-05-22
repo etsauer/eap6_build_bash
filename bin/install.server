@@ -1,0 +1,115 @@
+#!/bin/bash
+
+function install_server()
+{
+local SERVERGROUP=$2
+local SERVER_NAME=$3
+local CONF=/opt/jboss/apps/$APPGROUP/$SERVERGROUP.properties
+HOSTNAME=`hostname`
+
+if [ -z $CONF ]
+then
+	echo "No configuration file provided."
+	echo
+	echo "Usage: install.sh /path/to/properties/file"
+	exit
+fi
+
+source $CONF
+source $JBOSS_BUILD_HOME/bin/install.functions
+
+JBOSS_SERVER_BASE=/opt/jboss/apps/$APPGROUP/server-groups/$SERVERGROUP/servers/$SERVER_NAME
+
+if [ -z $SCRIPT_BASE ] || [ -z $JBOSS_HOME ] || [ -z $JBOSS_SERVER_BASE ] || [ -z $JBOSS_HOSTNAME ] || [ -z $JBOSS_MANAGEMENT_PORT ] || [ -z $JBOSS_MANAGEMENT_HTTP_PORT ] || [ -z $JBOSS_SERVER_PORT_OFFSET ]
+then
+	echo "Please make sure your $SERVERGROUP.properties file is filled out and in the proper place."
+	exit
+fi
+
+#Check if instance is already running on default hosts, and shut it down
+echo "Checking for running instances..."
+SERVER_STATE=`$JBOSS_HOME/bin/jboss-cli.sh --connect --controller=$JBOSS_HOSTNAME:$JBOSS_MANAGEMENT_PORT --command="read-attribute server-state" 2>/dev/null`
+if [ "$SERVER_STATE" == "running" ]
+then
+	echo "Server Running on default bindings, shutting down..."
+	$JBOSS_HOME/bin/jboss-cli.sh --connect --controller=localhost:$JBOSS_MANAGEMENT_PORT --command=":shutdown"
+fi
+
+echo "Starting clean instance of JBOSS EAP 6.0."
+# Copy stock configuration file
+#cp $JBOSS_HOME/standalone/configuration/* $JBOSS_SERVER_BASE/configuration/
+$JBOSS_HOME/bin/standalone.sh -Djboss.server.base.dir=$JBOSS_SERVER_BASE -Djboss.management.native.port=$JBOSS_MANAGEMENT_PORT -Djboss.management.http.port=$JBOSS_MANAGEMENT_HTTP_PORT -Djboss.socket.binding.port-offset=$JBOSS_SERVER_PORT_OFFSET & >/dev/null
+
+#Make sure instance is started before moving on
+echo "Waiting for isntance to start..."
+isRunning
+echo "Instance Started."
+
+#Always runs, configures TU standards for JBoss
+standards
+
+if [ "$NEED_VAULT" == "true" ]
+then
+echo "Configuring Vault..."
+vault
+#Make sure instance is started before moving on
+isRunning
+echo "Done."
+fi
+
+
+if [ "$NEED_JGROUPS" == "true" ]
+then
+echo "Configuring JGroups..."
+jgroups
+echo "Done."
+fi
+
+if [ "$NEED_ORACLE" == "true" ] || [ "$NEED_DB2" == "true" ] || [ "$NEED_SQLSERVER" == "true" ]
+then
+echo "Configuring Datasource Drivers..."
+database_driver
+echo "Done."
+fi
+
+if [ "$NEED_ORACLE_DATASOURCE" == "true" ] || [ "$NEED_DB2_DATASOURCE" == "true" ] || [ "$NEED_SQLSERVER" == "true" ]
+then
+echo "Configuring OracleDataSources..."
+datasource
+echo "Done."
+fi
+
+if [ "$NEED_SSL" == "true" ]
+then
+echo "Configuring SSL"
+ssl
+echo "Done."
+fi
+
+if [ "$NEED_MESSAGING" == "true" ]
+then
+echo "Configuring Messaging..."
+messaging
+echo "Done."
+fi
+
+if [ "$NEED_MAIL" == "true" ]
+then
+echo "Configuring Mail..."
+mail
+echo "Done."
+fi
+
+if [ "$NEED_ACCESS_LOGS" == "true" ]
+then
+echo "Configuring Access Logs..."
+access_logs
+echo "Done."
+fi
+
+#Shut down new instance
+echo "Shutting down new instance..."
+$JBOSS_HOME/bin/jboss-cli.sh --connect --controller=localhost:$JBOSS_MANAGEMENT_PORT --command=":shutdown"
+
+echo "JBoss Server group $SERVERGROUP has been configured, and shut down."
+}
