@@ -170,7 +170,7 @@ if [[ -z "$JBOSS_INSTALL_ROOT" ]]
 then
         echo "Please set JBOSS_INSTALL_ROOT to location of the jboss install directory. No trailing slash."
         echo
-        echo "Example: export JBOSS_INSTALL_ROOT=[username]@chmglos9bl03.corp.transunion.com:/opt/webhosting/jboss"
+        echo "Example: export JBOSS_INSTALL_ROOT=[username]@host:/opt/webhosting/jboss"
         exit 1
 fi
 
