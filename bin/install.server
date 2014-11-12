@@ -45,7 +45,7 @@ echo "Waiting for isntance to start..."
 isRunning
 echo "Instance Started."
 
-#Always runs, configures TU standards for JBoss
+#Always runs, configures standards for JBoss
 standards
 
 if [ "$NEED_VAULT" == "true" ]
