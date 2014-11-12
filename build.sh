@@ -1,6 +1,6 @@
 #!/bin/bash
 #set -x
-BUILD_NAME=jboss_TU_standalone_build
+BUILD_NAME=jboss_standalone_build
 SCRIPTS_BASE=/opt/jboss/webhosting/scripts
 BINARY_BASE=/opt/jboss/60
 BINARY_VERSION=jboss-eap-6.0
@@ -129,7 +129,7 @@ package() {
 
 	# Assumes a checkout() to /tmp
 	local current_dir
-	local filename=JBoss_TU_$(date +%Y%m%d-%H%M%S).tgz
+	local filename=JBoss_$(date +%Y%m%d-%H%M%S).tgz
 	cd /tmp
 	tar czf $target/$filename $BUILD_NAME
 	chmod a+r $target/$filename
@@ -153,7 +153,7 @@ show_help() {
 	echo "JBOSS BUILD INSTRUCTIONS"
 	echo "	1. Run $(basename $0) --build_tar {/where/to/place/archive/} (i.e. $(basename $0) --build_tar ~) to create a tarball of binaries and scripts and place it in the specified directory."
 	echo "	2. Place build script, tarball, and all app group and server properties files (filled out with desired configuration) on server or in remote location accessible by jboss id."
-	echo "	3. Run $(basename $0) --extract {tarball} (i.e. $(basename $0) --extract JBoss_TU_$(date +%Y%m%d-%H%M%S).tgz) to extract and place binaries/scripts."
+	echo "	3. Run $(basename $0) --extract {tarball} (i.e. $(basename $0) --extract JBoss_$(date +%Y%m%d-%H%M%S).tgz) to extract and place binaries/scripts."
 	echo "	4. Run $(basename $0) --setup {app-group} {/path/to/properties-files/dir} (i.e. $(basename $0) --setup tad ~/jboss_build/sample_installs/tad) to create app-group file system and place properties files in the expected location."
 	echo "	5. Run $(basename $0) --install {app-group} (i.e. $(basename $0) --install tad) to install and configure app-group and all subsequent servers."
 }
